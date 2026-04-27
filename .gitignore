@@ -105,3 +105,26 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Project-specific: large optional asset packs not required for the GitHub project.
+# Keep required content tracked separately: Assets/Toon Gas Station and Assets/R1.
+/[Aa]ssets/AllSkyFree/
+/[Aa]ssets/AllSkyFree.meta
+/[Aa]ssets/PBS Materials Variety Pack/
+/[Aa]ssets/PBS Materials Variety Pack.meta
+/[Aa]ssets/Polytope Studio/
+/[Aa]ssets/Polytope Studio.meta
+/[Aa]ssets/Real Stars Skybox/
+/[Aa]ssets/Real Stars Skybox.meta
+/[Aa]ssets/Versatile Studio Assets/
+/[Aa]ssets/Versatile Studio Assets.meta
+/[Aa]ssets/_TerrainAutoUpgrade/
+/[Aa]ssets/_TerrainAutoUpgrade.meta
+
+# Local-only retired demo environment. Replaced by Assets/Scenes/DemoScene.
+/[Aa]ssets/R1/
+/[Aa]ssets/R1.meta
+/[Aa]ssets/Scenes/R1Scene/
+/[Aa]ssets/Scenes/R1Scene.meta
+/[Aa]ssets/Scenes/R1Scene.unity
+/[Aa]ssets/Scenes/R1Scene.unity.meta
