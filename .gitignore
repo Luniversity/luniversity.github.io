@@ -106,6 +106,15 @@ InitTestScene*.unity*
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
+# Unity render-pipeline generated command buffer files in the project root.
+/ComputeCommandBuffer.cs
+/IBaseCommandBuffer.cs
+/IComputeCommandBuffer.cs
+/IRasterCommandBuffer.cs
+/IUnsafeCommandBuffer.cs
+/RasterCommandBuffer.cs
+/UnsafeCommandBuffer.cs
+
 # Project-specific: large optional asset packs not required for the GitHub project.
 # Keep required content tracked separately: Assets/Toon Gas Station and Assets/R1.
 /[Aa]ssets/AllSkyFree/

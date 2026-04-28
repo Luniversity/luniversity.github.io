@@ -1,4 +1,4 @@
-Shader "Custom/TiltShift/SimpleDOFv2"
+Shader "Custom/TiltShift/TiltShiftShader"
 {
     SubShader
     {
@@ -20,6 +20,9 @@ Shader "Custom/TiltShift/SimpleDOFv2"
         float _CoCRenderScale;
         float _BokehRadius;
         float _BlurStrength;
+        float _TiltAngle;
+        float _DebugMode;
+        float4x4 _InverseProjection;
 
         // gives access to the coc texture and blurred texture from the previous passes
         TEXTURE2D_X(_CoCTexture);
@@ -49,9 +52,71 @@ Shader "Custom/TiltShift/SimpleDOFv2"
                 float sensorHeight = max(_SensorSizeMM.y * 0.001, 0.0001);
                 float pixelsPerSensorMeter = _ScreenParams.y / sensorHeight;
 
-                float cocSensor = (f * f) / (N * (zf - f)) * ((z - zf) / z);
+
+                float2 ndcXY = uv * 2.0 - 1.0; // convert from [0,1] to [-1,1]
+                float4 projected = float4(ndcXY, rawDepth, 1.0);
+                float4 view = mul(_InverseProjection, projected);
+                float3 p = view.xyz / view.w; // perspective divide to get view space position
+
+                // debug check to compare against linear eye depth
+                float reconstructedDepth = -p.z;
+
+                float3 p0 = float3(0.0, 0.0, -_FocusDistance); // Origin of the focal plane
+                float tilt = radians(_TiltAngle); 
+                float3 n = normalize(float3(0.0, sin(tilt), cos(tilt))); // the normal vector of the focal plane
+                float d = -dot(n, p0); 
+
+                float denom = dot(n, p);
+                float zfLocal;
+
+                if (abs(denom) < 1e-5) // in case we get too close to 0
+                {
+                    zfLocal = _FocusDistance;
+                }
+                else
+                {
+                    float lambda = -d / denom;
+                    float3 pf = lambda * p;
+                    zfLocal = max(-pf.z, f + 0.0001);
+                }
+
+                float cocSensor = (f * f) / (N * (zfLocal - f)) * ((z - zfLocal) / z);
                 float cocPixels = cocSensor * pixelsPerSensorMeter * 0.5 * _CoCRenderScale;
                 float coc = clamp(cocPixels, -_BokehRadius, _BokehRadius);
+
+                if (_DebugMode > 0.5 && _DebugMode < 1.5)
+                {
+                    float amount = saturate(abs(coc) / _BokehRadius);
+                    if (coc < 0.0)
+                    {
+                        return float4(amount, 0.0, 0.0, 1.0);
+                    }
+                    return float4(amount, amount, amount, 1.0);
+                }
+
+                if (_DebugMode > 1.5 && _DebugMode < 2.5)
+                {
+                    float diff = z - zfLocal;
+                    float amount = saturate(1.0 - abs(diff) / 2.0);
+                    float3 nearColor = float3(0.2, 0.5, 1.0);
+                    float3 farColor = float3(1.0, 0.6, 0.2);
+                    float3 focusColor = float3(1.0, 1.0, 1.0);
+                    float3 sideColor = diff < 0.0 ? nearColor : farColor;
+                    float3 color = lerp(sideColor, focusColor, amount);
+                    return float4(color, 1.0);
+                }
+
+                if (_DebugMode > 2.5 && _DebugMode < 3.5)
+                {
+                    float delta = zfLocal - _FocusDistance;
+                    float amount = saturate(abs(delta) / max(_FocusDistance * 0.5, 0.0001));
+                    float3 nearColor = float3(0.2, 0.5, 1.0);
+                    float3 farColor = float3(1.0, 0.45, 0.8);
+                    float3 neutralColor = float3(1.0, 1.0, 1.0);
+                    float3 sideColor = delta < 0.0 ? nearColor : farColor;
+                    float3 color = lerp(neutralColor, sideColor, amount);
+                    return float4(color, 1.0);
+                }
 
                 return float4(coc, 0, 0, 1);
             }

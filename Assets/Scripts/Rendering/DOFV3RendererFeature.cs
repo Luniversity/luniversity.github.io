@@ -2,14 +2,12 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
-public class TiltShiftRendererFeature : ScriptableRendererFeature
+public class DOFV3RendererFeature : ScriptableRendererFeature
 {
     private enum OutputMode
     {
         Final,
-        CoC,
-        FocusBand,
-        LocalFocusDepth
+        CoCDebug
     }
 
     private enum BokehKernel
@@ -35,7 +33,6 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
     [SerializeField] private string targetCameraName = "Tilt Shift Camera";
     [SerializeField, Min(0.1f)] private float aperture = 16f;
     [SerializeField] private float focusDistance = 20f;
-    [SerializeField, Range(-45f, 45f)] private float tiltAngle = 0f;
     [SerializeField, Min(0f)] private float coCRenderScale = 1f;
     [SerializeField, Range(1f, 10f)] private float bokehRadius = 4f;
     [SerializeField, Range(0f, 1f)] private float blurStrength = 1f;
@@ -73,23 +70,16 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         if (!string.Equals(camera.name, targetCameraName, System.StringComparison.Ordinal))
             return;
 
-        // send the inverse projection matrix of the target camera to the shader
-        Matrix4x4 inverseProjection = camera.projectionMatrix.inverse;
-        material.SetMatrix("_InverseProjection", inverseProjection);
-
-        // the other parameters for the tilt-shift effect
         material.SetFloat("_FocalLengthMM", camera.focalLength);
         material.SetVector("_SensorSizeMM", camera.sensorSize);
         material.SetFloat("_Aperture", Mathf.Max(0.1f, aperture));
         material.SetFloat("_FocusDistance", focusDistance);
-        material.SetFloat("_TiltAngle", tiltAngle);
-        material.SetFloat("_DebugMode", (float)outputMode);
         material.SetFloat("_CoCRenderScale", Mathf.Max(0f, coCRenderScale));
         material.SetFloat("_BokehRadius", Mathf.Clamp(bokehRadius, 1f, 10f));
         material.SetFloat("_BlurStrength", Mathf.Clamp01(blurStrength));
         SetKernelKeyword(material, bokehKernel);
 
-        renderPass.SetOutputMode((int)outputMode);
+        renderPass.SetOutputMode(outputMode == OutputMode.CoCDebug ? 1 : 0);
         renderPass.renderPassEvent = renderPassEvent;
         renderPass.ConfigureInput(ScriptableRenderPassInput.Color | ScriptableRenderPassInput.Depth);
         renderer.EnqueuePass(renderPass);

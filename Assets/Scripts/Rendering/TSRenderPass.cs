@@ -8,8 +8,8 @@ public class TiltShiftRenderPass : ScriptableRenderPass
 {
     // declare the shader pass indixes (they are in order)
     private const string PassName = "TiltShift Pass";
+    private const int OutputModeFinal = 0;
     private const int CoCPassIndex = 0;
-    private const int CoCDebugPassIndex = 1;
     private const int PreFilterPassIndex = 2;
     private const int BlurPassIndex = 3;
     private const int PostFilterPassIndex = 4;
@@ -23,7 +23,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
     private static readonly MaterialPropertyBlock SharedPropertyBlock = new MaterialPropertyBlock();
 
     private readonly Material material;
-    private bool outputCoCDebug;
+    private int outputMode = OutputModeFinal;
 
 
     // the constructor takes a material which contains the shader we use
@@ -38,9 +38,9 @@ public class TiltShiftRenderPass : ScriptableRenderPass
     }
 
     // togggle for debug view
-    public void SetCoCDebugOutput(bool enabled)
+    public void SetOutputMode(int mode)
     {
-        outputCoCDebug = enabled;
+        outputMode = mode;
     }
     // Main function
     public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
@@ -64,11 +64,14 @@ public class TiltShiftRenderPass : ScriptableRenderPass
         if (!source.IsValid())
             return;
 
+        TextureDesc colorDesc = renderGraph.GetTextureDesc(source);
+        colorDesc.clearBuffer = false;
+
         // Step 1
         // create a coc texture
         TextureDesc cocDesc = renderGraph.GetTextureDesc(source);
         cocDesc.name = "_TiltShiftCoC";
-        cocDesc.format = GraphicsFormat.R16_SFloat;
+        cocDesc.format = outputMode == OutputModeFinal ? GraphicsFormat.R16_SFloat : colorDesc.format;
         cocDesc.clearBuffer = false;
         TextureHandle cocTexture = renderGraph.CreateTexture(cocDesc);
 
@@ -83,26 +86,12 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             cocTexture,
             resourceData.cameraDepthTexture);
 
-        TextureDesc colorDesc = renderGraph.GetTextureDesc(source);
-        colorDesc.clearBuffer = false;
-
         TextureHandle destination;
 
 
-        if (outputCoCDebug) // Debug view,
+        if (outputMode != OutputModeFinal) // Debug view
         {
-            colorDesc.name = "_TiltShiftCoCDebug";
-            destination = renderGraph.CreateTexture(colorDesc);
-            // run shader pass 1
-            AddFullscreenPass(
-                renderGraph,
-                "TiltShift CoC Debug",
-                CoCDebugPassIndex,
-                TextureHandle.nullHandle,
-                cocTexture,
-                TextureHandle.nullHandle,
-                destination,
-                TextureHandle.nullHandle);
+            destination = cocTexture;
         }
         else
         {
