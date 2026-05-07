@@ -15,14 +15,14 @@ MonoBehaviour:
   m_Active: 1
   shader: {fileID: 4800000, guid: 996394e81f01ee94887a0bef40d3b41c, type: 3}
   renderPassEvent: 550
-  outputMode: 3
+  outputMode: 0
   bokehKernel: 3
   targetCameraName: Tilt Shift Camera
-  aperture: 1.8
-  focusDistance: 10
-  tiltAngle: -45
+  aperture: 2
+  focusDistance: 10.35
+  tiltAngle: -70
   coCRenderScale: 1
-  bokehRadius: 5.76
+  bokehRadius: 7.4
   blurStrength: 1
 --- !u!114 &11400000
 MonoBehaviour:

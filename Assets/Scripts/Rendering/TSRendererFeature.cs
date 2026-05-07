@@ -35,7 +35,7 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
     [SerializeField] private string targetCameraName = "Tilt Shift Camera";
     [SerializeField, Min(0.1f)] private float aperture = 16f;
     [SerializeField] private float focusDistance = 20f;
-    [SerializeField, Range(-45f, 45f)] private float tiltAngle = 0f;
+    [SerializeField, Range(-70f, 70f)] private float tiltAngle = 0f;
     [SerializeField, Min(0f)] private float coCRenderScale = 1f;
     [SerializeField, Range(1f, 10f)] private float bokehRadius = 4f;
     [SerializeField, Range(0f, 1f)] private float blurStrength = 1f;
