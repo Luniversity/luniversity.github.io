@@ -14,6 +14,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
         #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
+        // Receive variables from the RendererFeature
         float _FocalLengthMM;
         float2 _SensorSizeMM;
         float _Aperture;
@@ -31,13 +32,13 @@ Shader "Custom/TiltShift/TiltShiftShader"
         TEXTURE2D_X(_CoCTexture);
         TEXTURE2D_X(_BlurredTexture);
 
+        // Disk sample patterns used by the bokeh blur pass
         #include "Assets/Shaders/PostProcessingFX/DiskKernels.hlsl"
 
         ENDHLSL
 
         Pass { Name "CoC" 
-            // this pass calculates the circle of confusion and stores it in the red channel of the output
-
+            // CoC pass calculates the circle of confusion
 
             HLSLPROGRAM
             #pragma vertex Vert
@@ -48,25 +49,30 @@ Shader "Custom/TiltShift/TiltShiftShader"
                 float2 uv = input.texcoord;
                 int debugMode = (int)round(_DebugMode);
 
+                // Read the camera depth buffer and convert to linear eye depth
                 float rawDepth = SampleSceneDepth(uv);
                 float z = max(LinearEyeDepth(rawDepth, _ZBufferParams), 0.0001);
+
+                // Convert physical camera values from mm to m
                 float f = _FocalLengthMM * 0.001;
                 float N = max(_Aperture, 0.1);
                 float sensorHeight = max(_SensorSizeMM.y * 0.001, 0.0001);
                 float pixelsPerSensorMeter = _ScreenParams.y / sensorHeight;
 
+                // Reconstruct the pixel position in view space
                 float2 ndcXY = uv * 2.0 - 1.0; // convert from [0,1] to [-1,1]
                 float4 projected = float4(ndcXY, rawDepth, 1.0);
                 float4 view = mul(_InverseProjection, projected);
                 float3 p = view.xyz / view.w; // perspective divide to get view space position
-
+                
+                // Define the focal plane before tilting
                 float3 p0 = float3(0.0, 0.0, -_FocusDistance); // Origin of the focal plane
 
+                // Compute the tilted focal plane normal
                 float tiltX = radians(_TiltAngleX); // compute in radians
                 float tiltY = radians(_TiltAngleY);
 
-                // build rx and ry rotation matrices
-                float3x3 rx = float3x3(
+                float3x3 rx = float3x3( // build rx and ry rotation matrices
                     1, 0, 0,
                     0, cos(tiltX), sin(tiltX),
                     0, -sin(tiltX), cos(tiltX)
@@ -78,12 +84,16 @@ Shader "Custom/TiltShift/TiltShiftShader"
                 );
                 float3 n0 = float3(0, 0, 1); // normal of the focal plane before tilt
                 float3 n = normalize(mul(ry, mul(rx, n0))); // normal of the focal plane after applying tilt rotations
+                
+                // Plane eq: dot(n, x) + d = 0
                 float d = -dot(n, p0); 
-
+                
+                // Find the intersection of the view ray with the focal plane to get the local focal distance
                 float denom = dot(n, p);
                 float zfLocal;
 
-                if (abs(denom) < 1e-5) {// in case we get too close to 0{
+                if (abs(denom) < 1e-5) {
+                    // Avoid division by 0
                     zfLocal = _FocusDistance;
                 }
                 else
@@ -93,10 +103,13 @@ Shader "Custom/TiltShift/TiltShiftShader"
                     zfLocal = max(-pf.z, f + 0.0001);
                 }
 
+                // Compute thin lens approximation for blur
+                // then convert from from metric units to pixel units
                 float cocSensor = (f * f) / (N * (zfLocal - f)) * ((z - zfLocal) / z);
                 float cocPixels = cocSensor * pixelsPerSensorMeter * 0.5 * _CoCRenderScale;
                 float coc = clamp(cocPixels, -_MaxCoCRadius, _MaxCoCRadius);
 
+                // Debug visualization modes
                 if (debugMode == 1){
                     float amount = saturate(abs(coc) / _MaxCoCRadius);
                     if (coc < 0.0)
@@ -133,13 +146,15 @@ Shader "Custom/TiltShift/TiltShiftShader"
 
             ENDHLSL}
         Pass { Name "Prefilter" 
-            
+            // Prefilter pass downsamples the image to half resolution
+
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment FragPrefilter
 
             float WeighColor(float3 color)
             {
+                // reduce the influence of very bright pixels
                 return 1.0 / (1.0 + max(max(color.r, color.g), color.b));
             }
 
@@ -147,7 +162,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
             {
                 float2 uv = input.texcoord;
 
-                // downsample the color to half resolution and store in halfColorTexture
+                // Downsample the color to half resolution and store in halfColorTexture
                 float4 offset = _BlitTexture_TexelSize.xyxy * float4(-0.5, 0.5, 0.5, -0.5);
 
                 float3 color0 = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.xy).rgb;
@@ -179,12 +194,14 @@ Shader "Custom/TiltShift/TiltShiftShader"
             ENDHLSL
             }
         Pass { Name "Blur"
+            // Blur pass applies the disk kernel bokeh at half resolution
 
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment FragBlur
             #pragma multi_compile_local _ KERNEL_SMALL KERNEL_MEDIUM KERNEL_LARGE KERNEL_VERYLARGE
 
+            // Converts a CoC value into a sample weight.
             float Weigh(float coc, float radius)
             {
                 float softness = 2.0;
@@ -196,13 +213,16 @@ Shader "Custom/TiltShift/TiltShiftShader"
                 float2 uv = input.texcoord;
                 float coc = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv).a;
 
+                // Seperate foreground and background objects 
                 float3 bgColor = 0.0;
                 float3 fgColor = 0.0;
                 float bgWeight = 0.0;
                 float fgWeight = 0.0;
 
+                // sample nearby pixels in a disk pattern
                 for (int k = 0; k < kSampleCount; k++)
                 {
+                    // compute the sample offset and radius in pixels
                     float2 offset = kDiskKernel[k] * _KernelRadius;
                     float radius = length(offset);
 
@@ -213,16 +233,20 @@ Shader "Custom/TiltShift/TiltShiftShader"
                         sampler_LinearClamp,
                         uv + offset
                     );
-
+                    
+                    // Positive CoC = background blur
                     float bgw = Weigh(max(0.0, min(sample.a, coc)), radius);
                     bgColor += sample.rgb * bgw;
                     bgWeight += bgw;
-
+                    
+                    // Negative CoC = foreground blur
                     float fgw = Weigh(-sample.a, radius);
                     fgColor += sample.rgb * fgw;
                     fgWeight += fgw;
                 }
 
+                // Normalize accumulated colors so the result is an average of all
+                // contributing samples rather than becoming brighter with more samples.
                 bgColor *= 1.0 / max(bgWeight, 0.0001);
                 fgColor *= 1.0 / max(fgWeight, 0.0001);
 
@@ -234,7 +258,8 @@ Shader "Custom/TiltShift/TiltShiftShader"
 
             ENDHLSL}
         Pass { Name "PostFilter"
-            // simple box blur to smooth out the downsampled disk kernel
+            // PostFilter pass applies a simple blur to the blurred image to reduce blockiness from the disk sampling pattern
+            
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment FragPostFilter
@@ -242,9 +267,10 @@ Shader "Custom/TiltShift/TiltShiftShader"
             float4 FragPostFilter(Varyings input) : SV_Target
             {
                 float2 uv = input.texcoord;
-
+                // simple 4-tap blur to reduce blockiness from the disk sampling pattern
                 float4 offset = _BlitTexture_TexelSize.xyxy * float4(-0.5, 0.5, 0.5, -0.5);
-
+                // average the 4 samples
+                // rgb = color, a = foreground blend factor
                 float4 color =
                     SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.xy) +
                     SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.zy) +
@@ -256,6 +282,8 @@ Shader "Custom/TiltShift/TiltShiftShader"
 
             ENDHLSL}
         Pass { Name "Composite" 
+            // Composite pass combines the sharp original image with the blurred bokeh image
+
             HLSLPROGRAM
 
             #pragma vertex Vert
@@ -267,7 +295,8 @@ Shader "Custom/TiltShift/TiltShiftShader"
 
                 // sample the coc radius
                 float coc = SAMPLE_TEXTURE2D_X(_CoCTexture, sampler_LinearClamp, uv).r;
-                // Keep focused fragments sharp, then blend into the half-resolution DoF texture.
+
+                // Convert CoC into a smooth 0-1 blur amount
                 float blurAmount = smoothstep(0.1, 1.0, abs(coc));
 
                 // sample original and blurred color, then lerp between them

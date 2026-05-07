@@ -50,6 +50,8 @@ public class TiltShiftRenderPass : ScriptableRenderPass
 
         // we only run for the game camera
         UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
+
+        // in case this render pass gets added to a camera that doesn't render to a texture
         if (cameraData.cameraType != CameraType.Game)
             return;
 
@@ -59,6 +61,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             Debug.LogWarning("Skipping TiltShift render pass because the active target is the back buffer.");
             return;
         }
+
         // get the source camera color texture
         TextureHandle source = resourceData.activeColorTexture;
         if (!source.IsValid())
@@ -67,15 +70,13 @@ public class TiltShiftRenderPass : ScriptableRenderPass
         TextureDesc colorDesc = renderGraph.GetTextureDesc(source);
         colorDesc.clearBuffer = false;
 
-        // Step 1
-        // create a coc texture
+        // Pass 1: CoC
         TextureDesc cocDesc = renderGraph.GetTextureDesc(source);
         cocDesc.name = "_TiltShiftCoC";
         cocDesc.format = outputMode == OutputModeFinal ? GraphicsFormat.R16_SFloat : colorDesc.format;
         cocDesc.clearBuffer = false;
         TextureHandle cocTexture = renderGraph.CreateTexture(cocDesc);
 
-        // run the CoC pass to fill the coc texture
         AddFullscreenPass(
             renderGraph,
             "TiltShift CoC",
@@ -95,7 +96,6 @@ public class TiltShiftRenderPass : ScriptableRenderPass
         }
         else
         {
-            // Step 2
             // create a half-resolution color texture
             TextureDesc halfColorDesc = colorDesc;
             halfColorDesc.width = Mathf.Max(1, halfColorDesc.width / 2);
@@ -106,7 +106,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             halfColorDesc.name = "_TiltShiftHalfColor";
             TextureHandle halfColorTexture = renderGraph.CreateTexture(halfColorDesc);
 
-            // run shader pass 2 to prefilter the color and CoC
+            // Pass 2: Prefilter
             AddFullscreenPass(
                 renderGraph,
                 "TiltShift PreFilter",
@@ -120,6 +120,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             halfColorDesc.name = "_TiltShiftHalfBokeh";
             TextureHandle halfBokehTexture = renderGraph.CreateTexture(halfColorDesc);
 
+            // Pass 3: Blur
             AddFullscreenPass(
                 renderGraph,
                 "TiltShift Bokeh",
@@ -133,6 +134,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             halfColorDesc.name = "_TiltShiftHalfBokehPostFilter";
             TextureHandle halfFilteredBokehTexture = renderGraph.CreateTexture(halfColorDesc);
 
+            // Pass 4: PostFilter
             AddFullscreenPass(
                 renderGraph,
                 "TiltShift Bokeh Post Filter",
@@ -146,6 +148,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             colorDesc.name = "_TiltShiftComposite";
             destination = renderGraph.CreateTexture(colorDesc);
 
+            // Pass 5: Composite
             AddFullscreenPass(
                 renderGraph,
                 "TiltShift Composite",

@@ -74,6 +74,8 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
             return;
 
         Camera camera = renderingData.cameraData.camera;
+
+        // Only apply effect to specified camera
         if (camera == null || camera.cameraType != CameraType.Game)
             return;
 
@@ -98,6 +100,7 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         material.SetFloat("_BlurStrength", Mathf.Clamp01(blurStrength));
         SetKernelKeyword(material, bokehKernel);
 
+        // Tell URP this pass needs the current camera color and depth textures.
         renderPass.SetOutputMode((int)outputMode);
         renderPass.renderPassEvent = renderPassEvent;
         renderPass.ConfigureInput(ScriptableRenderPassInput.Color | ScriptableRenderPassInput.Depth);
