@@ -13,14 +13,17 @@ Shader "Custom/TiltShift/TiltShiftShader"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+
         float _FocalLengthMM;
         float2 _SensorSizeMM;
         float _Aperture;
         float _FocusDistance;
         float _CoCRenderScale;
-        float _BokehRadius;
+        float _MaxCoCRadius;
+        float _KernelRadius;
         float _BlurStrength;
-        float _TiltAngle;
+        float _TiltAngleX;
+        float _TiltAngleY;
         float _DebugMode;
         float4x4 _InverseProjection;
 
@@ -43,34 +46,44 @@ Shader "Custom/TiltShift/TiltShiftShader"
             float4 FragCoC(Varyings input) : SV_Target
             {
                 float2 uv = input.texcoord;
+                int debugMode = (int)round(_DebugMode);
 
                 float rawDepth = SampleSceneDepth(uv);
                 float z = max(LinearEyeDepth(rawDepth, _ZBufferParams), 0.0001);
                 float f = _FocalLengthMM * 0.001;
                 float N = max(_Aperture, 0.1);
-                float zf = max(_FocusDistance, f + 0.0001);
                 float sensorHeight = max(_SensorSizeMM.y * 0.001, 0.0001);
                 float pixelsPerSensorMeter = _ScreenParams.y / sensorHeight;
-
 
                 float2 ndcXY = uv * 2.0 - 1.0; // convert from [0,1] to [-1,1]
                 float4 projected = float4(ndcXY, rawDepth, 1.0);
                 float4 view = mul(_InverseProjection, projected);
                 float3 p = view.xyz / view.w; // perspective divide to get view space position
 
-                // debug check to compare against linear eye depth
-                float reconstructedDepth = -p.z;
-
                 float3 p0 = float3(0.0, 0.0, -_FocusDistance); // Origin of the focal plane
-                float tilt = radians(_TiltAngle); 
-                float3 n = normalize(float3(0.0, sin(tilt), cos(tilt))); // the normal vector of the focal plane
+
+                float tiltX = radians(_TiltAngleX); // compute in radians
+                float tiltY = radians(_TiltAngleY);
+
+                // build rx and ry rotation matrices
+                float3x3 rx = float3x3(
+                    1, 0, 0,
+                    0, cos(tiltX), sin(tiltX),
+                    0, -sin(tiltX), cos(tiltX)
+                );
+                float3x3 ry = float3x3(
+                    cos(tiltY), 0, sin(tiltY),
+                    0, 1, 0,
+                    -sin(tiltY), 0, cos(tiltY)
+                );
+                float3 n0 = float3(0, 0, 1); // normal of the focal plane before tilt
+                float3 n = normalize(mul(ry, mul(rx, n0))); // normal of the focal plane after applying tilt rotations
                 float d = -dot(n, p0); 
 
                 float denom = dot(n, p);
                 float zfLocal;
 
-                if (abs(denom) < 1e-5) // in case we get too close to 0
-                {
+                if (abs(denom) < 1e-5) {// in case we get too close to 0{
                     zfLocal = _FocusDistance;
                 }
                 else
@@ -82,11 +95,10 @@ Shader "Custom/TiltShift/TiltShiftShader"
 
                 float cocSensor = (f * f) / (N * (zfLocal - f)) * ((z - zfLocal) / z);
                 float cocPixels = cocSensor * pixelsPerSensorMeter * 0.5 * _CoCRenderScale;
-                float coc = clamp(cocPixels, -_BokehRadius, _BokehRadius);
+                float coc = clamp(cocPixels, -_MaxCoCRadius, _MaxCoCRadius);
 
-                if (_DebugMode > 0.5 && _DebugMode < 1.5)
-                {
-                    float amount = saturate(abs(coc) / _BokehRadius);
+                if (debugMode == 1){
+                    float amount = saturate(abs(coc) / _MaxCoCRadius);
                     if (coc < 0.0)
                     {
                         return float4(amount, 0.0, 0.0, 1.0);
@@ -94,8 +106,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
                     return float4(amount, amount, amount, 1.0);
                 }
 
-                if (_DebugMode > 1.5 && _DebugMode < 2.5)
-                {
+                if (debugMode == 2){
                     float diff = z - zfLocal;
                     float amount = saturate(1.0 - abs(diff) / 2.0);
                     float3 nearColor = float3(0.2, 0.5, 1.0);
@@ -106,8 +117,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
                     return float4(color, 1.0);
                 }
 
-                if (_DebugMode > 2.5 && _DebugMode < 3.5)
-                {
+                if (debugMode == 3){
                     float delta = zfLocal - _FocusDistance;
                     float amount = saturate(abs(delta) / max(_FocusDistance * 0.5, 0.0001));
                     float3 nearColor = float3(0.2, 0.5, 1.0);
@@ -122,31 +132,6 @@ Shader "Custom/TiltShift/TiltShiftShader"
             }
 
             ENDHLSL}
-        Pass { Name "CoCDebug"
-            // basically same thing as CoC visualizer shader
-            // but we get the input from the coc pass above
-            HLSLPROGRAM
-            #pragma vertex Vert
-            #pragma fragment FragCoCDebug
-
-            float4 FragCoCDebug(Varyings input) : SV_Target
-            {
-                float2 uv = input.texcoord;
-
-                float coc = SAMPLE_TEXTURE2D_X(_CoCTexture, sampler_LinearClamp, uv).r;
-
-                float amount = saturate(abs(coc) / _BokehRadius);
-
-                if (coc < 0.0)
-                {
-
-                    return float4(amount, 0.0, 0.0, 1.0);
-                }
-                return float4(amount, amount, amount, 1.0);
-            }
-
-            ENDHLSL
-         }
         Pass { Name "Prefilter" 
             
             HLSLPROGRAM
@@ -218,7 +203,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
 
                 for (int k = 0; k < kSampleCount; k++)
                 {
-                    float2 offset = kDiskKernel[k] * _BokehRadius;
+                    float2 offset = kDiskKernel[k] * _KernelRadius;
                     float radius = length(offset);
 
                     offset *= _BlitTexture_TexelSize.xy;

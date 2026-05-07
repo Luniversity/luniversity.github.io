@@ -28,17 +28,24 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         "KERNEL_VERYLARGE"
     };
 
+    [Header("Misc Settings")]
     [SerializeField] private Shader shader;
     [SerializeField] private RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
     [SerializeField] private OutputMode outputMode = OutputMode.Final;
-    [SerializeField] private BokehKernel bokehKernel = BokehKernel.Medium;
-    [SerializeField] private string targetCameraName = "Tilt Shift Camera";
+
+    [Header("Focus Controls")]
     [SerializeField, Min(0.1f)] private float aperture = 16f;
     [SerializeField] private float focusDistance = 20f;
-    [SerializeField, Range(-70f, 70f)] private float tiltAngle = 0f;
-    [SerializeField, Min(0f)] private float coCRenderScale = 1f;
-    [SerializeField, Range(1f, 10f)] private float bokehRadius = 4f;
+    [SerializeField, Range(-70f, 70f)] private float tiltAngleX = 0f;
+    [SerializeField, Range(-70f, 70f)] private float tiltAngleY = 0f;
+
+    [Header("Blur Fine Tuning")]
+    [SerializeField] private BokehKernel bokehKernel = BokehKernel.Medium;
+    [SerializeField] private string targetCameraName = "Tilt Shift Camera";
     [SerializeField, Range(0f, 1f)] private float blurStrength = 1f;
+    [SerializeField, Min(0f)] private float coCRenderScale = 1f;
+    [SerializeField, Range(1f, 10f)] private float maxCoCRadius = 4f;
+    [SerializeField, Range(1f, 10f)] private float kernelRadius = 4f;
 
     private Material material;
     private TiltShiftRenderPass renderPass;
@@ -82,10 +89,12 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         material.SetVector("_SensorSizeMM", camera.sensorSize);
         material.SetFloat("_Aperture", Mathf.Max(0.1f, aperture));
         material.SetFloat("_FocusDistance", focusDistance);
-        material.SetFloat("_TiltAngle", tiltAngle);
+        material.SetFloat("_TiltAngleX", tiltAngleX);
+        material.SetFloat("_TiltAngleY", tiltAngleY);
         material.SetFloat("_DebugMode", (float)outputMode);
         material.SetFloat("_CoCRenderScale", Mathf.Max(0f, coCRenderScale));
-        material.SetFloat("_BokehRadius", Mathf.Clamp(bokehRadius, 1f, 10f));
+        material.SetFloat("_MaxCoCRadius", Mathf.Clamp(maxCoCRadius, 1f, 10f));
+        material.SetFloat("_KernelRadius", Mathf.Clamp(kernelRadius, 1f, 10f));
         material.SetFloat("_BlurStrength", Mathf.Clamp01(blurStrength));
         SetKernelKeyword(material, bokehKernel);
 

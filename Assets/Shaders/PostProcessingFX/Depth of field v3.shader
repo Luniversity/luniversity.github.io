@@ -13,13 +13,16 @@ Shader "Custom/TiltShift/DepthOfFieldV3"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+
         float _FocalLengthMM;
         float2 _SensorSizeMM;
         float _Aperture;
         float _FocusDistance;
         float _CoCRenderScale;
-        float _BokehRadius;
+        float _MaxCoCRadius;
+        float _KernelRadius;
         float _BlurStrength;
+        float _DebugMode;
 
         // gives access to the coc texture and blurred texture from the previous passes
         TEXTURE2D_X(_CoCTexture);
@@ -40,6 +43,7 @@ Shader "Custom/TiltShift/DepthOfFieldV3"
             float4 FragCoC(Varyings input) : SV_Target
             {
                 float2 uv = input.texcoord;
+                int debugMode = (int)round(_DebugMode);
 
                 float rawDepth = SampleSceneDepth(uv);
                 float z = max(LinearEyeDepth(rawDepth, _ZBufferParams), 0.0001);
@@ -51,37 +55,22 @@ Shader "Custom/TiltShift/DepthOfFieldV3"
 
                 float cocSensor = (f * f) / (N * (zf - f)) * ((z - zf) / z);
                 float cocPixels = cocSensor * pixelsPerSensorMeter * 0.5 * _CoCRenderScale;
-                float coc = clamp(cocPixels, -_BokehRadius, _BokehRadius);
+                float coc = clamp(cocPixels, -_MaxCoCRadius, _MaxCoCRadius);
+
+                if (debugMode == 1)
+                {
+                    float amount = saturate(abs(coc) / _MaxCoCRadius);
+                    if (coc < 0.0)
+                    {
+                        return float4(amount, 0.0, 0.0, 1.0);
+                    }
+                    return float4(amount, amount, amount, 1.0);
+                }
 
                 return float4(coc, 0, 0, 1);
             }
 
             ENDHLSL}
-        Pass { Name "CoCDebug"
-            // basically same thing as CoC visualizer shader
-            // but we get the input from the coc pass above
-            HLSLPROGRAM
-            #pragma vertex Vert
-            #pragma fragment FragCoCDebug
-
-            float4 FragCoCDebug(Varyings input) : SV_Target
-            {
-                float2 uv = input.texcoord;
-
-                float coc = SAMPLE_TEXTURE2D_X(_CoCTexture, sampler_LinearClamp, uv).r;
-
-                float amount = saturate(abs(coc) / _BokehRadius);
-
-                if (coc < 0.0)
-                {
-
-                    return float4(amount, 0.0, 0.0, 1.0);
-                }
-                return float4(amount, amount, amount, 1.0);
-            }
-
-            ENDHLSL
-         }
         Pass { Name "Prefilter" 
             
             HLSLPROGRAM
@@ -153,7 +142,7 @@ Shader "Custom/TiltShift/DepthOfFieldV3"
 
                 for (int k = 0; k < kSampleCount; k++)
                 {
-                    float2 offset = kDiskKernel[k] * _BokehRadius;
+                    float2 offset = kDiskKernel[k] * _KernelRadius;
                     float radius = length(offset);
 
                     offset *= _BlitTexture_TexelSize.xy;

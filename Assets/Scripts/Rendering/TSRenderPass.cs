@@ -10,10 +10,10 @@ public class TiltShiftRenderPass : ScriptableRenderPass
     private const string PassName = "TiltShift Pass";
     private const int OutputModeFinal = 0;
     private const int CoCPassIndex = 0;
-    private const int PreFilterPassIndex = 2;
-    private const int BlurPassIndex = 3;
-    private const int PostFilterPassIndex = 4;
-    private const int CompositePassIndex = 5;
+    private const int PreFilterPassIndex = 1;
+    private const int BlurPassIndex = 2;
+    private const int PostFilterPassIndex = 3;
+    private const int CompositePassIndex = 4;
 
     // these are the shader property IDs used in the shader, we cache them here for efficiency
     private static readonly int BlitTextureId = Shader.PropertyToID("_BlitTexture"); // this is the source texture for a pass

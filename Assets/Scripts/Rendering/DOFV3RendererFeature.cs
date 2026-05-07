@@ -34,7 +34,8 @@ public class DOFV3RendererFeature : ScriptableRendererFeature
     [SerializeField, Min(0.1f)] private float aperture = 16f;
     [SerializeField] private float focusDistance = 20f;
     [SerializeField, Min(0f)] private float coCRenderScale = 1f;
-    [SerializeField, Range(1f, 10f)] private float bokehRadius = 4f;
+    [SerializeField, Range(1f, 10f)] private float maxCoCRadius = 4f;
+    [SerializeField, Range(1f, 10f)] private float kernelRadius = 4f;
     [SerializeField, Range(0f, 1f)] private float blurStrength = 1f;
 
     private Material material;
@@ -74,8 +75,10 @@ public class DOFV3RendererFeature : ScriptableRendererFeature
         material.SetVector("_SensorSizeMM", camera.sensorSize);
         material.SetFloat("_Aperture", Mathf.Max(0.1f, aperture));
         material.SetFloat("_FocusDistance", focusDistance);
+        material.SetFloat("_DebugMode", outputMode == OutputMode.CoCDebug ? 1f : 0f);
         material.SetFloat("_CoCRenderScale", Mathf.Max(0f, coCRenderScale));
-        material.SetFloat("_BokehRadius", Mathf.Clamp(bokehRadius, 1f, 10f));
+        material.SetFloat("_MaxCoCRadius", Mathf.Clamp(maxCoCRadius, 1f, 10f));
+        material.SetFloat("_KernelRadius", Mathf.Clamp(kernelRadius, 1f, 10f));
         material.SetFloat("_BlurStrength", Mathf.Clamp01(blurStrength));
         SetKernelKeyword(material, bokehKernel);
 
