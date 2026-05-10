@@ -105,23 +105,51 @@ Here `z` is the current pixel depth, `zfLocal` is the local focus distance, `f` 
 
 The graphs below compare the simple linear CoC with a more lens-inspired version at two focus distances. Both reach zero at the focus distance, but the camera-inspired curve changes more strongly at close distances and more gradually at far distances.
 
-| Focus distance 0.5m | Focus distance 3m |
-|---|---|
-| ![CoC comparison graph at 0.5m](docs/images/CoC%20comparison%20graph%200.5m.png) | ![CoC comparison graph at 3m](docs/images/CoC%20comparison%203m.png) |
+**Focus distance 0.5m**
+
+![CoC comparison graph at 0.5m](docs/images/CoC%20comparison%20graph%200.5m.png)
+
+**Focus distance 3m**
+
+![CoC comparison graph at 3m](docs/images/CoC%20comparison%203m.png)
 
 The implementation is still a screen-space post-process, not a full lens simulation. A render-scale factor is still needed to map optical blur into the blur radius used by the shader. However, aperture and focal length now affect the result in a more meaningful way than a simple arbitrary blur slider.
 
 The screenshots below show the same main view with different aperture values. A smaller f-number produces a shallower depth of field, while a larger f-number keeps more of the scene sharp.
 
-| f/2.2 | f/5.6 | f/11 | f/22 |
-|---|---|---|---|
-| ![Main view f2.2](docs/images/main%20view%20f2.2.png) | ![Main view f5.6](docs/images/main%20view%20f5.6.png) | ![Main view f11](docs/images/main%20view%20f11.png) | ![Main view f22](docs/images/main%20view%20f22.png) |
+**f/2.2**
+
+![Main view f2.2](docs/images/main%20view%20f2.2.png)
+
+**f/5.6**
+
+![Main view f5.6](docs/images/main%20view%20f5.6.png)
+
+**f/11**
+
+![Main view f11](docs/images/main%20view%20f11.png)
+
+**f/22**
+
+![Main view f22](docs/images/main%20view%20f22.png)
 
 Changing the camera focal length also changes the result. This keeps the effect closer to camera behavior than the first linear CoC prototype.
 
-| 24mm | 35mm | 50mm | 75mm |
-|---|---|---|---|
-| ![Main view 24mm](docs/images/main%20view%2024mm.png) | ![Main view 35mm](docs/images/main%20view%2035mm.png) | ![Main view 50mm](docs/images/main%20view%2050mm.png) | ![Main view 75mm](docs/images/main%20view%2075mm.png) |
+**24mm**
+
+![Main view 24mm](docs/images/main%20view%2024mm.png)
+
+**35mm**
+
+![Main view 35mm](docs/images/main%20view%2035mm.png)
+
+**50mm**
+
+![Main view 50mm](docs/images/main%20view%2050mm.png)
+
+**75mm**
+
+![Main view 75mm](docs/images/main%20view%2075mm.png)
 
 ## Tilted Focus Plane
 
