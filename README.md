@@ -2,8 +2,6 @@
 
 This repository contains a Unity URP project implementing a custom depth-of-field and tilt-shift post-processing effect.
 
-The detailed writeup, images, implementation notes, and results are kept separately from the repo landing page:
-
 ## Documentation
 
 - [Full project page](docs/index.md)
@@ -14,8 +12,16 @@ The detailed writeup, images, implementation notes, and results are kept separat
 - `Assets/Scripts/DOFV3RendererFeature.cs` - custom renderer feature for the depth-of-field pipeline
 - `Assets/Scripts/TSRendererFeature.cs` - renderer feature for the tilt-shift effect
 - `Assets/Shaders/PostProcessingFX/` - post-processing shaders
-- `docs/` - long-form project documentation and image assets
+
+## Requirements
+
+- Unity `6000.4.1f1`
+- Universal Render Pipeline `17.4.0`
 
 ## Opening the Project
 
-Open this repository as a Unity project using the Unity version listed in `ProjectSettings/ProjectVersion.txt`.
+1. Clone the repository.
+2. Open Unity Hub.
+3. Add the repository folder as an existing project.
+4. Open it with Unity `6000.4.1f1`.
+5. Open a scene from `Assets/Scenes`.

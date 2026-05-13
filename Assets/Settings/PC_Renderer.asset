@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TiltShiftRendererFeature
   m_Active: 1
   shader: {fileID: 4800000, guid: 996394e81f01ee94887a0bef40d3b41c, type: 3}
-  outputMode: 4
+  outputMode: 0
   aperture: 2.2
-  focusDistance: 1.5
+  focusDistance: 4.51
   tiltAngleX: 0
   tiltAngleY: 0
   bokehKernel: 3
@@ -24,7 +24,7 @@ MonoBehaviour:
   blurStrength: 1
   coCRenderScale: 2
   maxCoCRadius: 10
-  kernelRadius: 8.24
+  kernelRadius: 5.02
   prefilterHighlightHandling: 0
 --- !u!114 &11400000
 MonoBehaviour:
