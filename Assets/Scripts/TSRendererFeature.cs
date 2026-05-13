@@ -30,7 +30,6 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
 
     [Header("Misc Settings")]
     [SerializeField] private Shader shader;
-    [SerializeField] private RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
     [SerializeField] private OutputMode outputMode = OutputMode.Final;
 
     [Header("Focus Controls")]
@@ -49,6 +48,7 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
 
     private Material material;
     private TiltShiftRenderPass renderPass;
+    private bool warnedHdrDisabled;
 
     public override void Create()
     {
@@ -62,10 +62,7 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         }
 
         material = CoreUtils.CreateEngineMaterial(shader);
-        renderPass = new TiltShiftRenderPass(material)
-        {
-            renderPassEvent = renderPassEvent
-        };
+        renderPass = new TiltShiftRenderPass(material);
     }
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
@@ -81,6 +78,19 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
 
         if (!string.Equals(camera.name, targetCameraName, System.StringComparison.Ordinal))
             return;
+
+        if (!renderingData.cameraData.isHdrEnabled)
+        {
+            if (!warnedHdrDisabled)
+            {
+                Debug.LogWarning("Tilt Shift HDR bokeh requires camera HDR rendering to be enabled.");
+                warnedHdrDisabled = true;
+            }
+        }
+        else
+        {
+            warnedHdrDisabled = false;
+        }
 
         // send the inverse projection matrix of the target camera to the shader
         Matrix4x4 inverseProjection = camera.projectionMatrix.inverse;
@@ -102,7 +112,6 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
 
         // Tell URP this pass needs the current camera color and depth textures.
         renderPass.SetOutputMode((int)outputMode);
-        renderPass.renderPassEvent = renderPassEvent;
         renderPass.ConfigureInput(ScriptableRenderPassInput.Color | ScriptableRenderPassInput.Depth);
         renderer.EnqueuePass(renderPass);
     }
