@@ -17,12 +17,12 @@ MonoBehaviour:
   renderPassEvent: 550
   outputMode: 0
   aperture: 2.2
-  focusDistance: 9.5
+  focusDistance: 1.34
   tiltAngleX: 0
   tiltAngleY: 0
   bokehKernel: 3
   targetCameraName: Tilt Shift Camera
-  blurStrength: 0
+  blurStrength: 1
   coCRenderScale: 2
   maxCoCRadius: 4.81
   kernelRadius: 6.69

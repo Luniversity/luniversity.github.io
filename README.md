@@ -18,7 +18,7 @@ The second view was set up to show Y-axis tilt. The drums are arranged in a line
 
 ## Project Progress
 
-Below are some highlights and milestones of the project, showcasing the steps and iterations of the DOF and Tilt effect before the final implementation.
+Below are some highlights and milestones of the project, showcasing the steps and iterations of the DOF and Tilt effect before the final implementation. The sections are ordered (more or less) chronologically.
 
 ## Early Experiments: Depth and CoC
 
@@ -114,6 +114,22 @@ The graphs below compare the simple linear CoC with a more lens-inspired version
 ![CoC comparison graph at 3m](docs/images/CoC%20comparison%203m.png)
 
 The implementation is still a screen-space post-process, not a full lens simulation. A render-scale factor is still needed to map optical blur into the blur radius used by the shader. However, aperture and focal length now affect the result in a more meaningful way than a simple arbitrary blur slider.
+
+## Focus Distance
+
+The focus distance sets the depth, measured from the camera, where the circle of confusion becomes zero. Pixels whose reconstructed view-space depth is close to that distance stay sharp. Pixels in front of or behind that distance get a larger signed CoC value and are blurred more strongly during the bokeh pass.
+
+In the normal, untilted case this behaves like moving a flat focus plane forward or backward through the scene. A short focus distance keeps nearby objects sharp and lets the background blur. Increasing the focus distance pushes the sharp region deeper into the scene, so the near foreground becomes more blurred while farther objects become clearer.
+
+| Focus distance 1.3m | Focus distance 4.5m |
+|---|---|
+| ![Main view focused at 1.3m](docs/images/main%20view%201.3m%20focus.png) | ![Main view focused at 4.5m](docs/images/main%20view%204.5m%20focus.png) |
+
+| Focus distance 9.5m | Focus distance 100m |
+|---|---|
+| ![Main view focused at 9.5m](docs/images/main%20view%209.5m%20focus.png) | ![Main view focused at 100m](docs/images/main%20view%20100m%20focus.png) |
+
+At 1.3m the focus plane is close to the camera, so the foreground is favored. At 4.5m and 9.5m the sharp band moves farther into the scene. At 100m the focus point is effectively near the far background, which makes most closer geometry fall outside the sharp region.
 
 The screenshots below show the same main view with different aperture values. A smaller f-number produces a shallower depth of field, while a larger f-number keeps more of the scene sharp.
 
@@ -230,7 +246,19 @@ The debug view confirms that the focus plane has rotated across the screen.
 
 ![Y tilt debug view](docs/images/20-y-tilt-debug.png)
 
-## Current Controls
+## Bright Highlight Limitation
+
+Looking at the a starry sky (or any bright highlight) exposed a limitation of the current implementation: the bokeh blur depends on the brightness values that are still available in the rendered color buffer when the DOF passes run.
+
+If very bright highlights have already been clamped or tone mapped before the blur stage, their extra energy is lost. When those clipped highlights are blurred, the shader averages white pixels with the surrounding dark sky, which can make the resulting bokeh too dim. In practice, many stars become blurred out instead of turning into strong bright bokeh shapes.
+
+| Starry sky without DOF | Starry sky with DOF |
+|---|---|
+| ![Third view starry sky without DOF](docs/images/third%20view%20no%20DOF.png) | ![Third view starry sky with DOF](docs/images/third%20view.png) |
+
+The blurred nigh sky washes out many stars, since they have been blended with many neighboring black pixels. 
+
+## Controls
 
 The effect is controlled from a custom renderer feature. The inspector is grouped into focus controls, blur tuning, and general settings.
 
