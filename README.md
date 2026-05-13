@@ -6,15 +6,38 @@ This project implements a custom depth-of-field and tilt-shift post-processing e
 
 The final effect can be tuned from the renderer feature inspector. The main view below shows the same scene without the custom effect, with ordinary depth of field, and with an X-axis tilted focus plane.
 
-| No custom DOF | DOF enabled | X-axis tilt |
-|---|---|---|
-| ![Main view without DOF](docs/images/main%20view%20no%20DOF.png) | ![Main view with DOF](docs/images/main%20view.png) | ![Main view with X tilt](docs/images/main%20view%20xtilt.png) |
+**No custom DOF**
+
+![Main view without DOF](docs/images/main%20view%20no%20DOF.png)
+
+Everything is sharp.
+
+**DOF enabled**
+
+![Main view with DOF](docs/images/main%20view.png)
+
+Foreground and background are blurred.
+
+**X-axis tilt**
+
+![Main view with X tilt](docs/images/main%20view%20xtilt.png)
+
+The focused area is now smaller with tilt.
+
 
 The second view was set up to show Y-axis tilt. The drums are arranged in a line, and the focus plane can be rotated so that more of them fall within the focused region.
 
-| No Y-axis tilt | Y-axis tilt |
-|---|---|
-| ![Second view without Y tilt](docs/images/second%20view.png) | ![Second view with Y tilt](docs/images/second%20view%20ytilt.png) |
+**No Y-axis tilt**
+
+![Second view without Y tilt](docs/images/second%20view.png)
+
+The middle drum is in focus while the others are blurred.
+
+**Y-axis tilt**
+
+![Second view with Y tilt](docs/images/second%20view%20ytilt.png)
+
+The tilted focal plane makes all the drums in focus at the same time.
 
 ## Project Progress
 
@@ -22,7 +45,7 @@ Below are some highlights and milestones of the project, showcasing the steps an
 
 ## Early Experiments: Depth and CoC
 
-The first steps was learning how to write a fullscreen post-processing shader in URP. A simple color tint helped me verify that the render pass was running correctly. After that, the shader sampled the camera depth texture and visualized linear depth.
+The first steps was learning how to write a fullscreen post-processing shader in URP. The first thing I made was a "shader" that sampled the camera depth texture and visualized linear depth.
 
 ![Depth visualization](docs/images/01-depth-visualization.png)
 
@@ -38,7 +61,7 @@ This was not physically accurate, but I just wanted something simple for testing
 
 ## First DOF Prototype
 
-The first working depth-of-field version blurred the image and blended between the sharp and blurred versions using the CoC value. This made the effect recognizable as depth of field, but the blur quality was still rough and the implementation was too monolithic.
+The first working depth-of-field version blurred the image and blended between the sharp and blurred versions using the CoC value. This made the effect recognizable as depth of field, but the blur quality was still rough.
 
 | Focus on lamppost | Focus on truck |
 |---|---|
@@ -83,7 +106,7 @@ The implementation was changed to use the sign of the CoC. Foreground and backgr
 |---|---|
 | ![Background bleed before](docs/images/08-background-bleed-before.png) | ![Background bleed after](docs/images/09-background-bleed-after.png) |
 
-You can see the change on the edge of the truck. 
+You can see the change on the edge of the truck, large bokehs in the background no longer appears on top of foreground objects.
 
 ## Camera-Inspired CoC
 
@@ -129,8 +152,6 @@ In the normal, untilted case this behaves like moving a flat focus plane forward
 |---|---|
 | ![Main view focused at 9.5m](docs/images/main%20view%209.5m%20focus.png) | ![Main view focused at 100m](docs/images/main%20view%20100m%20focus.png) |
 
-At 1.3m the focus plane is close to the camera, so the foreground is favored. At 4.5m and 9.5m the sharp band moves farther into the scene. At 100m the focus point is effectively near the far background, which makes most closer geometry fall outside the sharp region.
-
 The screenshots below show the same main view with different aperture values. A smaller f-number produces a shallower depth of field, while a larger f-number keeps more of the scene sharp.
 
 **f/2.2**
@@ -151,6 +172,8 @@ The screenshots below show the same main view with different aperture values. A 
 
 Changing the camera focal length also changes the result. This keeps the effect closer to camera behavior than the first linear CoC prototype.
 
+The differences is harder to notice as focal length also changes compression. But if you look at the small brick cube behind the unity orb, you can see the differnce is blur. 
+
 **24mm**
 
 ![Main view 24mm](docs/images/main%20view%2024mm.png)
@@ -166,6 +189,8 @@ Changing the camera focal length also changes the result. This keeps the effect 
 **75mm**
 
 ![Main view 75mm](docs/images/main%20view%2075mm.png)
+
+
 
 ## Tilted Focus Plane
 
