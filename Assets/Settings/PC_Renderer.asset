@@ -14,18 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TiltShiftRendererFeature
   m_Active: 1
   shader: {fileID: 4800000, guid: 996394e81f01ee94887a0bef40d3b41c, type: 3}
-  renderPassEvent: 550
-  outputMode: 0
+  outputMode: 4
   aperture: 2.2
-  focusDistance: 1.34
+  focusDistance: 1.5
   tiltAngleX: 0
   tiltAngleY: 0
   bokehKernel: 3
   targetCameraName: Tilt Shift Camera
   blurStrength: 1
   coCRenderScale: 2
-  maxCoCRadius: 4.81
-  kernelRadius: 6.69
+  maxCoCRadius: 10
+  kernelRadius: 8.24
+  prefilterHighlightHandling: 0
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0

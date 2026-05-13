@@ -9,7 +9,8 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         Final,
         CoC,
         FocusBand,
-        LocalFocusDepth
+        LocalFocusDepth,
+        SourceHDR
     }
 
     private enum BokehKernel
@@ -18,6 +19,12 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         Medium,
         Large,
         VeryLarge
+    }
+
+    private enum PrefilterHighlightHandling
+    {
+        PreserveHDR,
+        KarisWeighted
     }
 
     private static readonly string[] KernelKeywords =
@@ -45,6 +52,7 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
     [SerializeField, Min(0f)] private float coCRenderScale = 1f;
     [SerializeField, Range(1f, 10f)] private float maxCoCRadius = 4f;
     [SerializeField, Range(1f, 10f)] private float kernelRadius = 4f;
+    [SerializeField] private PrefilterHighlightHandling prefilterHighlightHandling = PrefilterHighlightHandling.PreserveHDR;
 
     private Material material;
     private TiltShiftRenderPass renderPass;
@@ -108,6 +116,7 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         material.SetFloat("_MaxCoCRadius", Mathf.Clamp(maxCoCRadius, 1f, 10f));
         material.SetFloat("_KernelRadius", Mathf.Clamp(kernelRadius, 1f, 10f));
         material.SetFloat("_BlurStrength", Mathf.Clamp01(blurStrength));
+        material.SetFloat("_PrefilterHighlightHandling", (float)prefilterHighlightHandling);
         SetKernelKeyword(material, bokehKernel);
 
         // Tell URP this pass needs the current camera color and depth textures.

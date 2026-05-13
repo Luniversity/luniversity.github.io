@@ -271,7 +271,7 @@ The debug view confirms that the focus plane has rotated across the screen.
 
 ![Y tilt debug view](docs/images/20-y-tilt-debug.png)
 
-## Bright Highlight Limitation
+## Limitation: Bright Highlights 
 
 Looking at the a starry sky (or any bright highlight) exposed a limitation of the current implementation: the bokeh blur depends on the brightness values that are still available in the rendered color buffer when the DOF passes run.
 
@@ -281,7 +281,61 @@ If very bright highlights have already been clamped or tone mapped before the bl
 |---|---|
 | ![Third view starry sky without DOF](docs/images/third%20view%20no%20DOF.png) | ![Third view starry sky with DOF](docs/images/third%20view.png) |
 
-The blurred nigh sky washes out many stars, since they have been blended with many neighboring black pixels. 
+The blurred night sky washes out many stars, since they have been blended with many neighboring black pixels.
+
+## Bringing the shader to HDR
+
+To address the washed-out highlights, the shader was moved toward an HDR workflow. The lighting of the scene was updated by dimming the directional light and adding a lamppost.
+
+The first thing i did was adding an HDR debug output mode so it was possible to check whether bright values were still present before the bokeh blur compressed them into ordinary white pixels.
+
+**HDR debug mode**
+
+![Main view HDR source debug](docs/images/main%20view%20HDR%20Source%20HDR.png)
+
+The debug view shows a false colour (purple) where samples outside the 0-1 range show up as purple.
+
+**Preserve HDR Mode**
+
+![Main view HDR preserve HDR](docs/images/main%20view%20HDR%20preserve%20HDR.png)
+
+This mode preserves the HDR values, keeping highlights as they are when defocused. 
+
+**Karis weighted Mode**
+
+![Main view HDR Karis weighted](docs/images/main%20view%20HDR%20keris%20weighted.png)
+
+
+Karis weighting reduces overly strong bright samples so highlights spread more smoothly through the blur.
+
+The weighted averaging happens in the prefilter pass:
+
+```hlsl
+float KarisWeight(float3 color)
+{
+    return 1.0 / (1.0 + max(max(color.r, color.g), color.b));
+}
+
+float weight0 = useKarisWeighting ? KarisWeight(color0) : 1.0;
+float weight1 = useKarisWeighting ? KarisWeight(color1) : 1.0;
+float weight2 = useKarisWeighting ? KarisWeight(color2) : 1.0;
+float weight3 = useKarisWeighting ? KarisWeight(color3) : 1.0;
+
+float3 color = color0 * weight0 + color1 * weight1 + color2 * weight2 + color3 * weight3;
+color /= max(weight0 + weight1 + weight2 + weight3, 0.00001);
+```
+
+**Starry sky without DOF**
+
+![Third view stars without DOF](docs/images/third%20view%20stars%20no%20DOF.png)
+
+These screenshots use a modified version of the earlier starry-sky view. The skybox is still SDR, but extra cyan stars have been added with high emissive values so they contain HDR brightness.
+
+**Starry sky with HDR DOF**
+
+![Third view stars with DOF](docs/images/third%20view%20stars%20DOF.png)
+
+With the HDR path, the cyan emissive stars blur correctly because their high brightness is preserved through the DOF pass. The original SDR skybox stars still behave like before, so many of them remain dim or disappear when blurred.
 
 ## Controls
 

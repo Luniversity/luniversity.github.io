@@ -9,17 +9,20 @@ public class TiltShiftRenderPass : ScriptableRenderPass
     // declare the shader pass indixes (they are in order)
     private const string PassName = "TiltShift Pass";
     private const int OutputModeFinal = 0;
+    private const int OutputModeSourceHDR = 4;
     private const int CoCPassIndex = 0;
     private const int PreFilterPassIndex = 1;
     private const int BlurPassIndex = 2;
     private const int PostFilterPassIndex = 3;
     private const int CompositePassIndex = 4;
+    private const int SourceHDRPassIndex = 5;
 
     // these are the shader property IDs used in the shader, we cache them here for efficiency
     private static readonly int BlitTextureId = Shader.PropertyToID("_BlitTexture"); // this is the source texture for a pass
     private static readonly int BlitScaleBiasId = Shader.PropertyToID("_BlitScaleBias");
     private static readonly int CoCTextureId = Shader.PropertyToID("_CoCTexture"); // our coc texture as a shader property
     private static readonly int BlurredTextureId = Shader.PropertyToID("_BlurredTexture"); // the blurred texture as a shader property
+    private static readonly int DebugModeId = Shader.PropertyToID("_DebugMode");
     private static readonly MaterialPropertyBlock SharedPropertyBlock = new MaterialPropertyBlock();
 
     private readonly Material material;
@@ -73,7 +76,8 @@ public class TiltShiftRenderPass : ScriptableRenderPass
         // Pass 1: CoC
         TextureDesc cocDesc = renderGraph.GetTextureDesc(source);
         cocDesc.name = "_TiltShiftCoC";
-        cocDesc.format = outputMode == OutputModeFinal ? GraphicsFormat.R16_SFloat : colorDesc.format;
+        // CoC stores a signed blur radius, not scene color, so one float channel is enough.
+        cocDesc.format = GraphicsFormat.R16_SFloat;
         cocDesc.clearBuffer = false;
         TextureHandle cocTexture = renderGraph.CreateTexture(cocDesc);
 
@@ -85,14 +89,31 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             TextureHandle.nullHandle,
             TextureHandle.nullHandle,
             cocTexture,
-            resourceData.cameraDepthTexture);
+            resourceData.cameraDepthTexture,
+            OutputModeFinal);
 
         TextureHandle destination;
 
 
         if (outputMode != OutputModeFinal) // Debug view
         {
-            destination = cocTexture;
+            TextureDesc debugDesc = colorDesc;
+            debugDesc.name = "_TiltShiftDebug";
+            TextureHandle debugTexture = renderGraph.CreateTexture(debugDesc);
+            bool sourceHDRDebug = outputMode == OutputModeSourceHDR;
+
+            AddFullscreenPass(
+                renderGraph,
+                sourceHDRDebug ? "TiltShift Source HDR Debug" : "TiltShift Debug",
+                sourceHDRDebug ? SourceHDRPassIndex : CoCPassIndex,
+                sourceHDRDebug ? source : TextureHandle.nullHandle,
+                TextureHandle.nullHandle,
+                TextureHandle.nullHandle,
+                debugTexture,
+                sourceHDRDebug ? TextureHandle.nullHandle : resourceData.cameraDepthTexture,
+                outputMode);
+
+            destination = debugTexture;
         }
         else
         {
@@ -100,6 +121,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             TextureDesc halfColorDesc = colorDesc;
             halfColorDesc.width = Mathf.Max(1, halfColorDesc.width / 2);
             halfColorDesc.height = Mathf.Max(1, halfColorDesc.height / 2);
+            // Keep the half-resolution blur chain HDR-capable so bright samples survive the bokeh blur.
             halfColorDesc.format = GraphicsFormat.R16G16B16A16_SFloat;
 
             // downsample the color and CoC to half resolution and store in halfColorTexture
@@ -171,7 +193,8 @@ public class TiltShiftRenderPass : ScriptableRenderPass
         TextureHandle cocTexture,
         TextureHandle blurredTexture,
         TextureHandle destination,
-        TextureHandle depthTexture)
+        TextureHandle depthTexture,
+        int debugModeOverride = -1)
     {
         using (IRasterRenderGraphBuilder builder = renderGraph.AddRasterRenderPass<PassData>(passName, out PassData passData, profilingSampler))
         {
@@ -180,6 +203,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             passData.cocTexture = cocTexture;
             passData.blurredTexture = blurredTexture;
             passData.shaderPassIndex = shaderPassIndex;
+            passData.debugModeOverride = debugModeOverride;
 
             if (passData.source.IsValid())
                 builder.UseTexture(passData.source, AccessFlags.Read);
@@ -196,7 +220,7 @@ public class TiltShiftRenderPass : ScriptableRenderPass
             builder.SetRenderAttachment(destination, 0, AccessFlags.Write);
             builder.SetRenderFunc(static (PassData data, RasterGraphContext context) =>
             {
-                ExecuteFullscreenPass(context.cmd, data.source, data.cocTexture, data.blurredTexture, data.material, data.shaderPassIndex);
+                ExecuteFullscreenPass(context.cmd, data.source, data.cocTexture, data.blurredTexture, data.material, data.shaderPassIndex, data.debugModeOverride);
             });
         }
     }
@@ -207,10 +231,13 @@ public class TiltShiftRenderPass : ScriptableRenderPass
         RTHandle cocTexture,
         RTHandle blurredTexture,
         Material material,
-        int shaderPassIndex)
+        int shaderPassIndex,
+        int debugModeOverride)
     {
         SharedPropertyBlock.Clear();
         SharedPropertyBlock.SetVector(BlitScaleBiasId, new Vector4(1f, 1f, 0f, 0f));
+        if (debugModeOverride >= 0)
+            SharedPropertyBlock.SetFloat(DebugModeId, debugModeOverride);
 
         if (source != null)
             SharedPropertyBlock.SetTexture(BlitTextureId, source);
@@ -231,5 +258,6 @@ public class TiltShiftRenderPass : ScriptableRenderPass
         internal TextureHandle cocTexture;
         internal TextureHandle blurredTexture;
         internal int shaderPassIndex;
+        internal int debugModeOverride;
     }
 }

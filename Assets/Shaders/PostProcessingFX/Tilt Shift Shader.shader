@@ -26,6 +26,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
         float _TiltAngleX;
         float _TiltAngleY;
         float _DebugMode;
+        float _PrefilterHighlightHandling;
         float4x4 _InverseProjection;
 
         // gives access to the coc texture and blurred texture from the previous passes
@@ -152,7 +153,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
             #pragma vertex Vert
             #pragma fragment FragPrefilter
 
-            float WeighColor(float3 color)
+            float KarisWeight(float3 color)
             {
                 // reduce the influence of very bright pixels
                 return 1.0 / (1.0 + max(max(color.r, color.g), color.b));
@@ -170,10 +171,11 @@ Shader "Custom/TiltShift/TiltShiftShader"
                 float3 color2 = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.xw).rgb;
                 float3 color3 = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.zw).rgb;
 
-                float weight0 = WeighColor(color0);
-                float weight1 = WeighColor(color1);
-                float weight2 = WeighColor(color2);
-                float weight3 = WeighColor(color3);
+                bool useKarisWeighting = _PrefilterHighlightHandling > 0.5;
+                float weight0 = useKarisWeighting ? KarisWeight(color0) : 1.0;
+                float weight1 = useKarisWeighting ? KarisWeight(color1) : 1.0;
+                float weight2 = useKarisWeighting ? KarisWeight(color2) : 1.0;
+                float weight3 = useKarisWeighting ? KarisWeight(color3) : 1.0;
 
                 float3 color = color0 * weight0 + color1 * weight1 + color2 * weight2 + color3 * weight3;
                 color /= max(weight0 + weight1 + weight2 + weight3, 0.00001);
@@ -306,6 +308,28 @@ Shader "Custom/TiltShift/TiltShiftShader"
                 float3 color = lerp(original, blurred.rgb, foregroundBlend * _BlurStrength);
                 
                 return float4(color, 1);
+            }
+
+            ENDHLSL}
+        Pass { Name "SourceHDR"
+            // Source HDR debug pass visualizes camera color before blur and tone mapping.
+
+            HLSLPROGRAM
+
+            #pragma vertex Vert
+            #pragma fragment FragSourceHDR
+
+            float4 FragSourceHDR(Varyings input) : SV_Target
+            {
+                float3 color = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, input.texcoord).rgb;
+                float peak = max(max(color.r, color.g), color.b);
+
+                if (peak <= 1.0)
+                    return float4(saturate(color), 1.0);
+
+                float hdrAmount = saturate(log2(max(peak, 1.0)) / 5.0);
+                float3 hdrColor = lerp(float3(1.0, 1.0, 0.0), float3(1.0, 0.0, 1.0), hdrAmount);
+                return float4(hdrColor, 1.0);
             }
 
             ENDHLSL}
