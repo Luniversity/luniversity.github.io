@@ -1,6 +1,6 @@
 # Tilt-Shift Depth of Field in Unity URP
 
-This project implements a custom depth-of-field and tilt-shift post-processing effect in Unity's Universal Render Pipeline. The work started with simple fullscreen shader experiments and gradually developed into a multi-pass bokeh pipeline driven by a camera-inspired circle of confusion calculation and a tilted focus plane.
+This blog documents my work implementing a custom depth-of-field and tilt-shift post-processing effect in Unity's Universal Render Pipeline. The work started with simple fullscreen shader experiments and gradually developed into a multi-pass bokeh pipeline driven by a camera-inspired circle of confusion calculation and a tilted focus plane.
 
 ## Final Result
 
