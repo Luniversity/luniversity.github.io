@@ -2,6 +2,31 @@
 
 This blog documents my work implementing a custom depth-of-field and tilt-shift post-processing effect in Unity's Universal Render Pipeline. The work started with simple fullscreen shader experiments and gradually developed into a multi-pass bokeh pipeline driven by a camera-inspired circle of confusion calculation and a tilted focus plane.
 
+## Table of Contents
+
+- [Final Result](#final-result)
+- [Project Progress](#project-progress)
+    - [Early Experiments: Depth and CoC](#early-experiments-depth-and-coc)
+    - [First DOF Prototype](#first-dof-prototype)
+    - [From Single Pass to Multi-Pass](#from-single-pass-to-multi-pass)
+    - [From Blur to Bokeh](#from-blur-to-bokeh)
+    - [Foreground vs Background Blur](#foreground-vs-background-blur)
+    - [Camera-Inspired CoC](#camera-inspired-coc)
+    - [Focus Distance](#focus-distance)
+    - [Tilted Focus Plane](#tilted-focus-plane)
+        - [Debug Views](#debug-views)
+        - [Focus Band](#focus-band)
+        - [Local Focus Depth](#local-focus-depth)
+        - [CoC](#coc)
+    - [Tilt Results](#tilt-results)
+    - [Limitation: Bright Highlights](#limitation-bright-highlights)
+    - [Bringing the shader to HDR](#bringing-the-shader-to-hdr)
+- [Controls](#controls)
+- [Important Files](#important-files)
+- [Requirements](#requirements)
+- [Opening the Project](#opening-the-project)
+- [References](#references)
+
 ## Final Result
 
 The final effect can be tuned from the renderer feature inspector. The main view below shows the same scene without the custom effect, with ordinary depth of field, and with an X-axis tilted focus plane.
