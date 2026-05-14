@@ -33,8 +33,9 @@ Shader "Custom/TiltShift/TiltShiftShader"
         TEXTURE2D_X(_CoCTexture);
         TEXTURE2D_X(_BlurredTexture);
 
-        // Disk sample patterns used by the bokeh blur pass
+        // Disk and generated sample patterns used by the bokeh blur pass
         #include "Assets/Shaders/PostProcessingFX/DiskKernels.hlsl"
+        #include "Assets/Shaders/PostProcessingFX/WeightedBokehKernels.hlsl"
 
         ENDHLSL
 
@@ -202,12 +203,32 @@ Shader "Custom/TiltShift/TiltShiftShader"
             #pragma vertex Vert
             #pragma fragment FragBlur
             #pragma multi_compile_local _ KERNEL_SMALL KERNEL_MEDIUM KERNEL_LARGE KERNEL_VERYLARGE
+            #pragma multi_compile_local _ BOKEH_POLYGON_3 BOKEH_POLYGON_5 BOKEH_POLYGON_6 BOKEH_POLYGON_8
 
             // Converts a CoC value into a sample weight.
             float Weigh(float coc, float radius)
             {
                 float softness = 2.0;
                 return saturate((coc - radius + softness) / softness);
+            }
+            #if defined(BOKEH_WEIGHTED_KERNEL)
+            static const int kActiveBokehSampleCount = kWeightedBokehSampleCount;
+            #else
+            static const int kActiveBokehSampleCount = kSampleCount;
+            #endif
+            // helper function to get the sample offset, radius, and weight for a given kernel index, depending on the active kernel type
+            void GetBokehSample(int index, out float2 offset, out float radius, out float weight)
+            {
+                #if defined(BOKEH_WEIGHTED_KERNEL)
+                float4 kernel = kWeightedBokehKernel[index];
+                offset = kernel.xy * _KernelRadius;
+                radius = kernel.w * _KernelRadius;
+                weight = kernel.z;
+                #else
+                offset = kDiskKernel[index] * _KernelRadius;
+                radius = length(offset);
+                weight = 1.0;
+                #endif
             }
 
             float4 FragBlur(Varyings input) : SV_Target
@@ -221,12 +242,14 @@ Shader "Custom/TiltShift/TiltShiftShader"
                 float bgWeight = 0.0;
                 float fgWeight = 0.0;
 
-                // sample nearby pixels in a disk pattern
-                for (int k = 0; k < kSampleCount; k++)
+                // Sample nearby pixels using the active bokeh kernel.
+                for (int k = 0; k < kActiveBokehSampleCount; k++)
                 {
-                    // compute the sample offset and radius in pixels
-                    float2 offset = kDiskKernel[k] * _KernelRadius;
-                    float radius = length(offset);
+                    // Compute sample offset, stored radius, and contribution weight.
+                    float2 offset;
+                    float radius;
+                    float kernelWeight;
+                    GetBokehSample(k, offset, radius, kernelWeight);
 
                     offset *= _BlitTexture_TexelSize.xy;
 
@@ -237,12 +260,12 @@ Shader "Custom/TiltShift/TiltShiftShader"
                     );
                     
                     // Positive CoC = background blur
-                    float bgw = Weigh(max(0.0, min(sample.a, coc)), radius);
+                    float bgw = Weigh(max(0.0, min(sample.a, coc)), radius) * kernelWeight;
                     bgColor += sample.rgb * bgw;
                     bgWeight += bgw;
                     
                     // Negative CoC = foreground blur
-                    float fgw = Weigh(-sample.a, radius);
+                    float fgw = Weigh(-sample.a, radius) * kernelWeight;
                     fgColor += sample.rgb * fgw;
                     fgWeight += fgw;
                 }
@@ -252,7 +275,7 @@ Shader "Custom/TiltShift/TiltShiftShader"
                 bgColor *= 1.0 / max(bgWeight, 0.0001);
                 fgColor *= 1.0 / max(fgWeight, 0.0001);
 
-                float bgfg = min(1.0, fgWeight * 3.14159265359 / kSampleCount);
+                float bgfg = min(1.0, fgWeight * 3.14159265359 / kActiveBokehSampleCount);
                 float3 color = lerp(bgColor, fgColor, bgfg);
 
                 return float4(color, bgfg);
@@ -269,17 +292,22 @@ Shader "Custom/TiltShift/TiltShiftShader"
             float4 FragPostFilter(Varyings input) : SV_Target
             {
                 float2 uv = input.texcoord;
-                // simple 4-tap blur to reduce blockiness from the disk sampling pattern
-                float4 offset = _BlitTexture_TexelSize.xyxy * float4(-0.5, 0.5, 0.5, -0.5);
-                // average the 4 samples
-                // rgb = color, a = foreground blend factor
-                float4 color =
-                    SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.xy) +
-                    SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.zy) +
-                    SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.xw) +
-                    SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset.zw);
+                float2 texel = _BlitTexture_TexelSize.xy;
 
-                return color * 0.25;
+                // 3x3 tent blur to reduce visible individual kernel samples while
+                // preserving more shape definition than a wider flat box filter.
+                float4 color = 0.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2(-1.0, -1.0)) * 1.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2( 0.0, -1.0)) * 2.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2( 1.0, -1.0)) * 1.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2(-1.0,  0.0)) * 2.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv) * 4.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2( 1.0,  0.0)) * 2.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2(-1.0,  1.0)) * 1.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2( 0.0,  1.0)) * 2.0;
+                color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + texel * float2( 1.0,  1.0)) * 1.0;
+
+                return color * 0.0625;
             }
 
             ENDHLSL}

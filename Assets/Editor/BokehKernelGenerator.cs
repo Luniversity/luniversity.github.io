@@ -1,0 +1,249 @@
+using UnityEditor;
+using UnityEngine;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text;
+
+public static class BokehKernelGenerator
+{
+    private const string OutputIncludePath = "Assets/Shaders/PostProcessingFX/WeightedBokehKernels.hlsl";
+    private const int SampleCount =  192;
+    private const float GoldenAngle = 2.3999632f;
+
+    private static readonly KernelDefinition[] KernelDefinitions =
+    {
+        new KernelDefinition("BOKEH_POLYGON_3", KernelShape.RegularPolygon, 3),
+        new KernelDefinition("BOKEH_POLYGON_5", KernelShape.RegularPolygon, 5),
+        new KernelDefinition("BOKEH_POLYGON_6", KernelShape.RegularPolygon, 6),
+        new KernelDefinition("BOKEH_POLYGON_8", KernelShape.RegularPolygon, 8),
+    };
+
+    [MenuItem("Tools/Tilt Shift/Generate Weighted Bokeh Kernels")]
+    public static void Generate()
+    {
+        List<GeneratedKernel> generatedKernels = new List<GeneratedKernel>(KernelDefinitions.Length);
+
+        for (int i = 0; i < KernelDefinitions.Length; i++)
+        {
+            KernelDefinition definition = KernelDefinitions[i];
+            List<KernelSample> samples = GenerateSamples(definition);
+            generatedKernels.Add(new GeneratedKernel(definition, samples));
+        }
+
+        WriteKernelInclude(generatedKernels);
+
+        Debug.Log(
+            $"Generated {generatedKernels.Count} procedural bokeh kernels with {SampleCount} samples each " +
+            $"and wrote '{OutputIncludePath}'."
+        );
+    }
+
+    private static List<KernelSample> GenerateSamples(KernelDefinition definition)
+    {
+        switch (definition.Shape)
+        {
+            case KernelShape.RegularPolygon:
+                return GenerateRegularPolygonSamples(definition.Sides, SampleCount);
+
+            default:
+                Debug.LogError($"Unsupported bokeh kernel shape '{definition.Shape}'.");
+                return new List<KernelSample>();
+        }
+    }
+
+    private static List<KernelSample> GenerateRegularPolygonSamples(int sides, int sampleCount)
+    {
+        List<KernelSample> samples = new List<KernelSample>(sampleCount);
+
+        for (int i = 0; i < sampleCount; i++)
+        {
+            // Vogel spiral placement gives deterministic, even-looking coverage
+            // without the clumps that random image sampling produced.
+            float angle = i * GoldenAngle;
+            float normalizedAreaRadius = Mathf.Sqrt((i + 0.5f) / sampleCount);
+
+            Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            float boundaryRadius = GetRegularPolygonBoundaryRadius(direction, sides);
+            Vector2 position = direction * normalizedAreaRadius * boundaryRadius;
+
+            // Procedural polygon kernels are uniform apertures, so every sample
+            // contributes equally. More artistic weights can be added per shape later.
+            float weight = 1.0f;
+            float radius = Mathf.Clamp01(position.magnitude);
+            samples.Add(new KernelSample(position.x, position.y, weight, radius));
+        }
+
+        return samples;
+    }
+
+    private static float GetRegularPolygonBoundaryRadius(Vector2 direction, int sides)
+    {
+        Vector2[] vertices = GetRegularPolygonVertices(sides);
+        float boundaryRadius = float.PositiveInfinity;
+
+        for (int i = 0; i < sides; i++)
+        {
+            Vector2 a = vertices[i];
+            Vector2 b = vertices[(i + 1) % sides];
+            Vector2 edge = b - a;
+            float denominator = Cross(direction, edge);
+
+            if (Mathf.Abs(denominator) < 0.000001f)
+                continue;
+
+            float rayDistance = Cross(a, edge) / denominator;
+            float edgePosition = Cross(a, direction) / denominator;
+
+            if (rayDistance > 0f && edgePosition >= 0f && edgePosition <= 1f)
+                boundaryRadius = Mathf.Min(boundaryRadius, rayDistance);
+        }
+
+        return float.IsPositiveInfinity(boundaryRadius) ? 1.0f : boundaryRadius;
+    }
+
+    private static Vector2[] GetRegularPolygonVertices(int sides)
+    {
+        Vector2[] vertices = new Vector2[sides];
+        float rotation = Mathf.PI * 0.5f;
+
+        for (int i = 0; i < sides; i++)
+        {
+            float angle = rotation + i * Mathf.PI * 2.0f / sides;
+            vertices[i] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+        }
+
+        return vertices;
+    }
+
+    private static float Cross(Vector2 a, Vector2 b)
+    {
+        return a.x * b.y - a.y * b.x;
+    }
+
+    private static void WriteKernelInclude(List<GeneratedKernel> generatedKernels)
+    {
+        string absoluteOutputPath = Path.GetFullPath(OutputIncludePath);
+        StringBuilder builder = new StringBuilder();
+
+        builder.AppendLine("#ifndef UNITY_POSTFX_WEIGHTED_BOKEH_KERNELS");
+        builder.AppendLine("#define UNITY_POSTFX_WEIGHTED_BOKEH_KERNELS");
+        builder.AppendLine();
+        builder.AppendLine("// This file is generated by Assets/Editor/BokehKernelGenerator.cs.");
+        builder.AppendLine("// Weighted bokeh sample format:");
+        builder.AppendLine("//   x, y: normalized aperture-space offset in the [-1, 1] range");
+        builder.AppendLine("//   z:    normalized contribution weight");
+        builder.AppendLine("//   w:    normalized blur radius in the [0, 1] range");
+        builder.AppendLine();
+        WriteWeightedKernelMacro(builder, generatedKernels);
+
+        for (int i = 0; i < generatedKernels.Count; i++)
+            WriteKernelBlock(builder, generatedKernels[i]);
+
+        builder.AppendLine("#endif // UNITY_POSTFX_WEIGHTED_BOKEH_KERNELS");
+
+        File.WriteAllText(absoluteOutputPath, builder.ToString(), Encoding.UTF8);
+        AssetDatabase.ImportAsset(OutputIncludePath);
+        AssetDatabase.Refresh();
+    }
+
+    private static void WriteWeightedKernelMacro(StringBuilder builder, List<GeneratedKernel> generatedKernels)
+    {
+        builder.Append("#if ");
+
+        for (int i = 0; i < generatedKernels.Count; i++)
+        {
+            if (i > 0)
+                builder.Append(" || ");
+
+            builder.Append($"defined({generatedKernels[i].Definition.Keyword})");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("#define BOKEH_WEIGHTED_KERNEL");
+        builder.AppendLine("#endif");
+        builder.AppendLine();
+    }
+
+    private static void WriteKernelBlock(StringBuilder builder, GeneratedKernel generatedKernel)
+    {
+        KernelDefinition definition = generatedKernel.Definition;
+        List<KernelSample> samples = generatedKernel.Samples;
+
+        builder.AppendLine($"#if defined({definition.Keyword})");
+        builder.AppendLine();
+        builder.AppendLine($"static const int kWeightedBokehSampleCount = {samples.Count};");
+        builder.AppendLine("static const float4 kWeightedBokehKernel[kWeightedBokehSampleCount] = {");
+
+        for (int i = 0; i < samples.Count; i++)
+        {
+            KernelSample sample = samples[i];
+            builder.Append("    float4(");
+            builder.Append(FormatFloat(sample.X));
+            builder.Append(", ");
+            builder.Append(FormatFloat(sample.Y));
+            builder.Append(", ");
+            builder.Append(FormatFloat(sample.Weight));
+            builder.Append(", ");
+            builder.Append(FormatFloat(sample.Radius));
+            builder.AppendLine("),");
+        }
+
+        builder.AppendLine("};");
+        builder.AppendLine();
+        builder.AppendLine($"#endif // {definition.Keyword}");
+        builder.AppendLine();
+    }
+
+    private static string FormatFloat(float value)
+    {
+        return value.ToString("0.######", CultureInfo.InvariantCulture);
+    }
+
+    private enum KernelShape
+    {
+        RegularPolygon
+    }
+
+    private readonly struct KernelDefinition
+    {
+        public readonly string Keyword;
+        public readonly KernelShape Shape;
+        public readonly int Sides;
+
+        public KernelDefinition(string keyword, KernelShape shape, int sides)
+        {
+            Keyword = keyword;
+            Shape = shape;
+            Sides = sides;
+        }
+    }
+
+    private readonly struct GeneratedKernel
+    {
+        public readonly KernelDefinition Definition;
+        public readonly List<KernelSample> Samples;
+
+        public GeneratedKernel(KernelDefinition definition, List<KernelSample> samples)
+        {
+            Definition = definition;
+            Samples = samples;
+        }
+    }
+
+    private readonly struct KernelSample
+    {
+        public readonly float X;
+        public readonly float Y;
+        public readonly float Weight;
+        public readonly float Radius;
+
+        public KernelSample(float x, float y, float weight, float radius)
+        {
+            X = x;
+            Y = y;
+            Weight = weight;
+            Radius = radius;
+        }
+    }
+}

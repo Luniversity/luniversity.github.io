@@ -15,10 +15,14 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
 
     private enum BokehKernel
     {
-        Small,
-        Medium,
-        Large,
-        VeryLarge
+        DiskSmall,
+        DiskMedium,
+        DiskLarge,
+        DiskVeryLarge,
+        Polygon3,
+        Polygon5,
+        Polygon6,
+        Polygon8
     }
 
     private enum PrefilterHighlightHandling
@@ -27,7 +31,19 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         KarisWeighted
     }
 
-    private static readonly string[] KernelKeywords =
+    private static readonly string[] BokehKeywords =
+    {
+        "KERNEL_SMALL",
+        "KERNEL_MEDIUM",
+        "KERNEL_LARGE",
+        "KERNEL_VERYLARGE",
+        "BOKEH_POLYGON_3",
+        "BOKEH_POLYGON_5",
+        "BOKEH_POLYGON_6",
+        "BOKEH_POLYGON_8"
+    };
+
+    private static readonly string[] DiskKernelKeywords =
     {
         "KERNEL_SMALL",
         "KERNEL_MEDIUM",
@@ -46,12 +62,12 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
     [SerializeField, Range(-70f, 70f)] private float tiltAngleY = 0f;
 
     [Header("Blur Fine Tuning")]
-    [SerializeField] private BokehKernel bokehKernel = BokehKernel.Medium;
+    [SerializeField] private BokehKernel bokehKernel = BokehKernel.DiskMedium;
     [SerializeField] private string targetCameraName = "Tilt Shift Camera";
     [SerializeField, Range(0f, 1f)] private float blurStrength = 1f;
     [SerializeField, Min(0f)] private float coCRenderScale = 1f;
-    [SerializeField, Range(1f, 10f)] private float maxCoCRadius = 4f;
-    [SerializeField, Range(1f, 10f)] private float kernelRadius = 4f;
+    [SerializeField, Range(1f, 20f)] private float maxCoCRadius = 4f;
+    [SerializeField, Range(1f, 20f)] private float kernelRadius = 4f;
     [SerializeField] private PrefilterHighlightHandling prefilterHighlightHandling = PrefilterHighlightHandling.PreserveHDR;
 
     private Material material;
@@ -113,8 +129,8 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
         material.SetFloat("_TiltAngleY", tiltAngleY);
         material.SetFloat("_DebugMode", (float)outputMode);
         material.SetFloat("_CoCRenderScale", Mathf.Max(0f, coCRenderScale));
-        material.SetFloat("_MaxCoCRadius", Mathf.Clamp(maxCoCRadius, 1f, 10f));
-        material.SetFloat("_KernelRadius", Mathf.Clamp(kernelRadius, 1f, 10f));
+        material.SetFloat("_MaxCoCRadius", Mathf.Clamp(maxCoCRadius, 1f, 20f));
+        material.SetFloat("_KernelRadius", Mathf.Clamp(kernelRadius, 1f, 20f));
         material.SetFloat("_BlurStrength", Mathf.Clamp01(blurStrength));
         material.SetFloat("_PrefilterHighlightHandling", (float)prefilterHighlightHandling);
         SetKernelKeyword(material, bokehKernel);
@@ -134,9 +150,33 @@ public class TiltShiftRendererFeature : ScriptableRendererFeature
 
     private static void SetKernelKeyword(Material material, BokehKernel kernel)
     {
-        for (int i = 0; i < KernelKeywords.Length; i++)
-            material.DisableKeyword(KernelKeywords[i]);
+        for (int i = 0; i < BokehKeywords.Length; i++)
+            material.DisableKeyword(BokehKeywords[i]);
 
-        material.EnableKeyword(KernelKeywords[(int)kernel]);
+        switch (kernel)
+        {
+            case BokehKernel.DiskSmall:
+            case BokehKernel.DiskMedium:
+            case BokehKernel.DiskLarge:
+            case BokehKernel.DiskVeryLarge:
+                material.EnableKeyword(DiskKernelKeywords[(int)kernel]);
+                break;
+
+            case BokehKernel.Polygon3:
+                material.EnableKeyword("BOKEH_POLYGON_3");
+                break;
+
+            case BokehKernel.Polygon5:
+                material.EnableKeyword("BOKEH_POLYGON_5");
+                break;
+
+            case BokehKernel.Polygon6:
+                material.EnableKeyword("BOKEH_POLYGON_6");
+                break;
+
+            case BokehKernel.Polygon8:
+                material.EnableKeyword("BOKEH_POLYGON_8");
+                break;
+        }
     }
 }
